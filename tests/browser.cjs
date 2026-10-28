@@ -1,0 +1,37 @@
+// Run with: node tests/browser.cjs (requires Playwright and a running dev server).
+const { chromium } = require('playwright');
+const assert = require('node:assert/strict');
+(async () => {
+ const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] });
+ const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
+ const errors=[];page.on('pageerror', e=>errors.push(e.message));
+ await page.goto(process.env.SHORT_TEST_URL || 'http://127.0.0.1:5173');
+ await page.getByRole('textbox',{name:'Document content'}).waitFor();
+ assert.match(await page.locator('#editor').innerText(),/Good things start/);
+ await page.screenshot({path:'/tmp/short-desktop.png',fullPage:true});
+ await page.getByRole('button',{name:/New document/}).first().click();
+ await page.getByRole('textbox',{name:'Document title',exact:true}).fill('A test document');
+ const editor=page.getByRole('textbox',{name:'Document content'});
+ await editor.fill('Words worth keeping.');
+ await page.reload();
+ assert.equal(await page.locator('#document-title').inputValue(),'A test document');
+ assert.equal(await editor.innerText(),'Words worth keeping.');
+ await editor.selectText();await page.getByRole('button',{name:'Bold',exact:true}).click();
+ assert.match(await editor.innerHTML(),/<b>|font-weight: bold/);
+ await page.getByRole('button',{name:'Star document',exact:true}).click();
+ await page.locator('[data-filter="starred"]').click();
+ assert.equal(await page.locator('.document-item').count(),1);
+ await page.getByRole('button',{name:'Export',exact:false}).click();
+ const downloaded=page.waitForEvent('download');
+ await page.locator('[data-export="txt"]').click();
+ const file=await downloaded; assert.equal(file.suggestedFilename(),'A test document.txt');
+ const fs=require('node:fs');assert.equal(fs.readFileSync(await file.path(),'utf8'),'Words worth keeping.');
+ await page.locator('#document-menu').click();await page.locator('#duplicate').click();
+ assert.equal(await page.locator('#document-title').inputValue(),'A test document (copy)');
+ await page.locator('[data-filter="all"]').click();await page.locator('.search input').fill('A test document');
+ assert.equal(await page.locator('.document-item').count(),2);
+ await page.setViewportSize({width:390,height:844});await page.screenshot({path:'/tmp/short-mobile.png',fullPage:true});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ assert.deepEqual(errors,[]);console.log('Passed: initial document, creation, editing, persistence, bold, starring, filtering, export contents, duplication, mobile layout, no runtime errors.');
+ await browser.close();
+})().catch(e=>{console.error(e);process.exit(1)});
