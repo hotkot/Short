@@ -1,0 +1,43 @@
+name: Build Short
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build downloadable app
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Short
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build Short
+        run: npm run build
+      - name: Upload downloadable app
+        uses: actions/upload-artifact@v4
+        with:
+          name: Short
+          path: dist/Short.html
+          if-no-files-found: error
+          retention-days: 90
+      - name: Show download instructions
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Short is ready
+          Download **Short** from the **Artifacts** section of this run.
+          Extract the ZIP and double-click **Short.html** to open the app in your browser.
+          No terminal, installation, or web server is needed.
+
+          Documents are saved in this browser. Export important work before replacing or moving the HTML file, since file-based browser storage can vary by browser and file location.
+          EOF
